@@ -2,11 +2,22 @@
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
 camera.position.z = 30;
+
+// The canvas and camera are sized from the viewport at boot and on every
+// resize, so the field always fills the window without stretching.
+function updateViewport() {
+  const width = Math.max(window.innerWidth, 1);
+  const height = Math.max(window.innerHeight, 1);
+  camera.aspect = width / height;
+  camera.updateProjectionMatrix();
+  renderer.setSize(width, height);
+}
+updateViewport();
+window.addEventListener('resize', updateViewport);
 
 const N = 8000;
 const positions = new Float32Array(N * 3);
