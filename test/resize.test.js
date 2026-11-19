@@ -9,7 +9,7 @@ const SKETCH = fs.readFileSync(path.join(__dirname, '..', 'sketch.js'), 'utf8');
 // Runs sketch.js against a minimal DOM/Three.js double so the viewport wiring
 // can be asserted without a browser.
 function makeSketch(width, height) {
-  const calls = { setSize: [], projection: 0 };
+  const calls = { setSize: [], pixelRatio: [], projection: 0 };
   const listeners = new Map();
   const created = {};
   const window = {
@@ -19,7 +19,7 @@ function makeSketch(width, height) {
     addEventListener(type, fn) { listeners.set(type, fn); },
   };
   class WebGLRenderer {
-    setPixelRatio() {}
+    setPixelRatio(ratio) { calls.pixelRatio.push(ratio); }
     setSize(w, h) { calls.setSize.push([w, h]); }
     render() {}
   }
@@ -70,6 +70,19 @@ test('boot sizes the canvas and camera from the viewport', () => {
   assert.deepEqual(calls.setSize, [[1440, 900]]);
   assert.equal(created.camera.aspect, 1440 / 900);
   assert.equal(calls.projection, 1);
+  assert.deepEqual(calls.pixelRatio, [2]);
+});
+
+test('a resize from a different-DPI monitor refreshes the pixel ratio', () => {
+  const { calls, listeners, window } = makeSketch(1440, 900);
+  window.devicePixelRatio = 1.5;
+  listeners.get('resize')();
+  assert.equal(calls.pixelRatio.at(-1), 1.5);
+
+  // The ratio stays capped at 2 on a device that reports more.
+  window.devicePixelRatio = 3;
+  listeners.get('resize')();
+  assert.equal(calls.pixelRatio.at(-1), 2);
 });
 
 test('resize updates the camera aspect and the renderer size', () => {

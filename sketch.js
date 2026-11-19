@@ -1,19 +1,21 @@
 // Flow-field particle system
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
 camera.position.z = 30;
 
 // The canvas and camera are sized from the viewport at boot and on every
-// resize, so the field always fills the window without stretching.
+// resize, so the field always fills the window without stretching. The pixel
+// ratio is refreshed here too: dragging the window to a different-DPI monitor
+// fires a resize, and a stale ratio leaves the drawing buffer blurry.
 function updateViewport() {
   const width = Math.max(window.innerWidth, 1);
   const height = Math.max(window.innerHeight, 1);
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(width, height);
 }
 updateViewport();
