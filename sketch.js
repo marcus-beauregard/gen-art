@@ -22,12 +22,13 @@ updateViewport();
 window.addEventListener('resize', updateViewport);
 
 const N = 8000;
+const BOUND = 30; // half-extent of the seeding box; particles wrap here
 const positions = new Float32Array(N * 3);
 const velocities = new Float32Array(N * 3);
 for (let i = 0; i < N; i++) {
-  positions[i * 3] = (Math.random() - 0.5) * 60;
-  positions[i * 3 + 1] = (Math.random() - 0.5) * 60;
-  positions[i * 3 + 2] = (Math.random() - 0.5) * 60;
+  positions[i * 3] = (Math.random() - 0.5) * 2 * BOUND;
+  positions[i * 3 + 1] = (Math.random() - 0.5) * 2 * BOUND;
+  positions[i * 3 + 2] = (Math.random() - 0.5) * 2 * BOUND;
 }
 const geo = new THREE.BufferGeometry();
 geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -49,6 +50,12 @@ function tick(t) {
     velocities[iz] += Math.sin(n * 3) * 0.004;
     pos[ix] += velocities[ix]; pos[iy] += velocities[iy]; pos[iz] += velocities[iz];
     velocities[ix] *= 0.96; velocities[iy] *= 0.96; velocities[iz] *= 0.96;
+    // Wrap instead of respawning: the particle re-enters on the opposite face
+    // with its velocity intact rather than jumping to a random spot, so the
+    // field keeps its density and the motion reads as one continuous flow.
+    while (pos[ix] > BOUND) pos[ix] -= BOUND * 2; while (pos[ix] < -BOUND) pos[ix] += BOUND * 2;
+    while (pos[iy] > BOUND) pos[iy] -= BOUND * 2; while (pos[iy] < -BOUND) pos[iy] += BOUND * 2;
+    while (pos[iz] > BOUND) pos[iz] -= BOUND * 2; while (pos[iz] < -BOUND) pos[iz] += BOUND * 2;
   }
   geo.attributes.position.needsUpdate = true;
   points.rotation.y = t * 0.02;
