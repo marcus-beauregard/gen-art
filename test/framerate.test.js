@@ -33,6 +33,7 @@ function makeSketch({ seed = 1, width = 1280, height = 720 } = {}) {
   let frame = null;
   let geometry = null;
   let mesh = null;
+  let camera = null;
   const window = {
     innerWidth: width,
     innerHeight: height,
@@ -50,6 +51,7 @@ function makeSketch({ seed = 1, width = 1280, height = 720 } = {}) {
       this.aspect = aspect;
       this.position = { z: 0 };
       this.updateProjectionMatrix = () => {};
+      camera = this;
     }
   }
   class BufferAttribute {
@@ -79,6 +81,7 @@ function makeSketch({ seed = 1, width = 1280, height = 720 } = {}) {
   assert.equal(typeof frame, 'function', 'sketch.js must schedule its first frame');
   return {
     positions: geometry.attributes.position.array,
+    camera,
     frame: (timestamp) => frame(timestamp),
     rotationY: () => mesh.rotation.y,
   };
@@ -112,7 +115,7 @@ test('the mesh rotation tracks simulated seconds, not frame count', () => {
 });
 
 test('a stalled frame advances the field by the clamped step, not by the stall', () => {
-  const { positions, frame, rotationY } = makeSketch();
+  const { positions, camera, frame, rotationY } = makeSketch();
   frame(0);
   const before = Float32Array.from(positions);
   frame(5000); // tab was backgrounded for five seconds
@@ -121,7 +124,14 @@ test('a stalled frame advances the field by the clamped step, not by the stall',
   // The same clamp has to bound the integrator: an unclamped five-second step
   // would carry a particle by tens of units, not by a fraction of one. Measured
   // through the wrap, since a particle seeded near the edge crosses the face.
-  const BOUND = 30;
+  // The wrap box is sized from the camera, so the span has to be derived the
+  // same way rather than assumed to be the old 60 units.
+  const tanHalf = Math.tan((camera.fov * Math.PI) / 360);
+  const tanHalfX = tanHalf * camera.aspect;
+  const BOUND = Math.min(
+    (tanHalf * camera.position.z) / (1 + tanHalf * Math.SQRT2),
+    (tanHalfX * camera.position.z) / (Math.SQRT2 * Math.sqrt(1 + tanHalfX * tanHalfX)),
+  );
   const SPAN = BOUND * 2;
   const throughWrap = (d) => (((d + BOUND) % SPAN) + SPAN) % SPAN - BOUND;
   for (let i = 0; i < positions.length; i++) {
