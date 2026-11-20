@@ -16,6 +16,7 @@ camera.position.z = 30;
 // ~43% of the particle budget outside the view for the entire run.
 const SPIN_REACH = Math.SQRT2;
 let bound = 0;
+let sceneReady = false; // the cloud exists, so a resize may draw the static frame
 
 function seedingBound() {
   const tanHalf = Math.tan((FOV * Math.PI) / 360);
@@ -41,6 +42,9 @@ function updateViewport() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(width, height);
   bound = seedingBound();
+  // A resize clears the drawing buffer. Paused, nothing else would paint the
+  // new size, so the page would sit blank until motion is resumed.
+  if (sceneReady && !animating) draw();
 }
 updateViewport();
 window.addEventListener('resize', updateViewport);
@@ -100,8 +104,60 @@ function tick(now) {
     while (pos[iz] > bound) pos[iz] -= bound * 2; while (pos[iz] < -bound) pos[iz] += bound * 2;
   }
   geo.attributes.position.needsUpdate = true;
+  draw();
+  if (!animating) return; // a paused loop must not keep re-arming itself
+  scheduleFrame();
+}
+
+// Somebody who has asked their OS for reduced motion gets one static frame
+// instead of a full-screen animation at the display refresh rate. The
+// preference is watched, so toggling it takes effect without a reload; there
+// is no way to stop the loop short of closing the tab otherwise.
+const reduceMotion = typeof window.matchMedia === 'function'
+  ? window.matchMedia('(prefers-reduced-motion: reduce)')
+  : null;
+
+let animating = false; // whether the loop may schedule the next frame
+
+// Every queued frame carries the run generation it was scheduled for. A frame
+// queued before a pause is stale: it must neither draw nor queue a successor,
+// or flipping the preference off and back on before that frame runs would
+// leave two loops re-arming from the same pending callback.
+let runGeneration = 0;
+
+function draw() {
   points.rotation.y = elapsed * 0.02;
   renderer.render(scene, camera);
-  requestAnimationFrame(tick);
 }
-requestAnimationFrame(tick);
+
+function scheduleFrame() {
+  const generation = runGeneration;
+  requestAnimationFrame((now) => {
+    if (generation !== runGeneration) return; // stale frame from a stopped run
+    tick(now);
+  });
+}
+
+function setAnimating(next) {
+  if (next === animating) return;
+  animating = next;
+  if (!animating) {
+    runGeneration += 1; // invalidates whatever is already queued
+    return;
+  }
+  // Restart the clock so the first frame after a pause has no elapsed step to
+  // make up for; otherwise resuming would jump the field by the pause length.
+  last = null;
+  scheduleFrame();
+}
+
+if (reduceMotion) {
+  const onChange = (event) => setAnimating(!event.matches);
+  if (typeof reduceMotion.addEventListener === 'function') reduceMotion.addEventListener('change', onChange);
+  else if (typeof reduceMotion.addListener === 'function') reduceMotion.addListener(onChange);
+}
+
+sceneReady = true;
+animating = !(reduceMotion && reduceMotion.matches);
+if (animating) scheduleFrame();
+else draw();
